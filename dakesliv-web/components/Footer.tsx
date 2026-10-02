@@ -3,12 +3,14 @@ import Link from "next/link";
 const quickLinks = [
   { label: "Home", href: "/" },
   { label: "About", href: "/about" },
-  { label: "Foundation", href: "/foundation" },
+  // Foundation link hidden until the program is live — see the note in
+  // app/page.tsx for how to bring it back.
 ];
 
 const supportLinks = [
   { label: "Help & Support", href: "/help" },
   { label: "Privacy Policy", href: "/privacy-policy" },
+  { label: "Cookie Policy", href: "/cookie-policy" },
   { label: "Terms & Conditions", href: "/terms" },
 ];
 

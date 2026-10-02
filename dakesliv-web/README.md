@@ -17,6 +17,8 @@ app/
   pay/[bookingId]/      Triggers the real M-Pesa STK Push, polls for confirmation
   sign-in/page.tsx      Phone/OTP sign-in, wired to the backend, honors a
                         ?redirect= param so the booking flow isn't lost
+  admin/                Staff-only panel — see below, entirely separate auth from
+                        the customer sign-in above
 components/
   Header, Hero, ServiceCrest, UnitsGrid, HowItWorks, FoundationBanner, Footer
 lib/
@@ -24,7 +26,34 @@ lib/
                         part stays static, it's not booking-relevant data
   api.ts                Shared fetch helpers, the JWT-attaching apiFetch()
                         wrapper, and TypeScript types matching the backend
+  admin-api.ts           Same idea as api.ts but for staff — a separate token
+                        (dakesliv_staff_token) and separate fetch wrapper, so a
+                        customer session can never accidentally reach admin routes
 ```
+
+## The admin panel
+
+`app/admin/` is a real, working staff dashboard — login, today's schedule,
+walk-in booking creation, and an owner-only pending-invoices view. Tested
+end to end through the actual UI against a live backend, including a real
+walk-in booking created through the form and confirmed showing up correctly
+on the dashboard afterward.
+
+- `admin/login` — email+password, stores the token under a different
+  `localStorage` key (`dakesliv_staff_token`) than the customer session
+- `admin/layout.tsx` — checks that token on every admin route via
+  `GET /staff/auth/me`, redirects to login if it's missing or invalid, and
+  shows/hides nav items based on role (only `owner` sees "Pending invoices")
+- `admin/walk-in` — front-desk booking form: pick a service, enter the
+  customer's phone (finds or creates them), pick date/time and payment
+  method (cash, or M-Pesa collected directly at the till — either
+  confirms immediately, no STK Push, since the money's already changed hands)
+- `admin/invoices` — owner-only; if a non-owner account somehow reaches
+  this URL, the backend rejects the request rather than the frontend just
+  hiding the link
+
+There's no public signup for staff accounts — see the backend README for
+how the first one gets created.
 
 ## The real booking flow, end to end
 
@@ -66,8 +95,10 @@ slightly better loading performance (self-hosted, no extra request).
   doesn't support it yet either, see the API's README)
 - No confirmation email/SMS view — the payment page shows a success screen,
   but there's no "my bookings" history page yet
-- No admin panel yet (see the backend's `bookings/today` and `invoices/pending`
-  endpoints, which are meant to power it)
+- No "manage staff" screen in the admin panel — new staff accounts are
+  created via the backend's seed script for now
+- No unit-manager-scoped view — the role exists on staff accounts, no page
+  filters by business unit yet
 
 ## Running locally
 

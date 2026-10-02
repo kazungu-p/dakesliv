@@ -9,7 +9,10 @@ const navLinks = [
   { label: "Services", href: "/#units" },
   { label: "How it works", href: "/#how-it-works" },
   { label: "About", href: "/about" },
-  { label: "Foundation", href: "/foundation" },
+  // Foundation nav link hidden until the program is actually live — the
+  // page and backend contribution logic stay fully working, just not
+  // publicly linked yet. Re-add { label: "Foundation", href: "/foundation" }
+  // when ready to announce it.
 ];
 
 // Section ids on the homepage that the anchor links above point to. Kept as
@@ -90,8 +93,8 @@ export default function Header() {
           <Image
             src="/logo.png"
             alt="DAKESLIV Group"
-            width={36}
-            height={36}
+            width={50}
+            height={50}
             className="rounded-sm"
           />
           <span
