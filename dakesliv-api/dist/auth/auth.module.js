@@ -14,6 +14,8 @@ const user_entity_1 = require("./user.entity");
 const auth_service_1 = require("./auth.service");
 const auth_controller_1 = require("./auth.controller");
 const otp_store_service_1 = require("./otp-store.service");
+const mail_service_1 = require("./mail.service");
+const jwt_auth_guard_1 = require("./jwt-auth.guard");
 let AuthModule = class AuthModule {
 };
 exports.AuthModule = AuthModule;
@@ -27,7 +29,7 @@ exports.AuthModule = AuthModule = __decorate([
             }),
         ],
         controllers: [auth_controller_1.AuthController],
-        providers: [auth_service_1.AuthService, otp_store_service_1.OtpStoreService],
+        providers: [auth_service_1.AuthService, otp_store_service_1.OtpStoreService, mail_service_1.MailService, jwt_auth_guard_1.JwtAuthGuard],
         exports: [auth_service_1.AuthService],
     })
 ], AuthModule);

@@ -8,26 +8,44 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.OtpStoreService = void 0;
 const common_1 = require("@nestjs/common");
+const crypto_1 = require("crypto");
 const OTP_TTL_MS = 5 * 60 * 1000;
+const RESEND_COOLDOWN_MS = 30 * 1000;
+const MAX_ATTEMPTS = 5;
 let OtpStoreService = class OtpStoreService {
     constructor() {
         this.store = new Map();
     }
-    set(phone, code) {
-        this.store.set(phone, { code, expiresAt: Date.now() + OTP_TTL_MS });
+    secondsUntilResend(key) {
+        const entry = this.store.get(key);
+        if (!entry)
+            return 0;
+        const remaining = entry.sentAt + RESEND_COOLDOWN_MS - Date.now();
+        return remaining > 0 ? Math.ceil(remaining / 1000) : 0;
     }
-    verify(phone, code) {
-        const entry = this.store.get(phone);
+    set(key, code) {
+        const now = Date.now();
+        this.store.set(key, { code, sentAt: now, expiresAt: now + OTP_TTL_MS, attempts: 0 });
+    }
+    verify(key, code) {
+        const entry = this.store.get(key);
         if (!entry)
             return false;
         if (Date.now() > entry.expiresAt) {
-            this.store.delete(phone);
+            this.store.delete(key);
             return false;
         }
-        const matches = entry.code === code;
-        if (matches)
-            this.store.delete(phone);
-        return matches;
+        entry.attempts += 1;
+        const a = Buffer.from(entry.code);
+        const b = Buffer.from(code);
+        const matches = a.length === b.length && (0, crypto_1.timingSafeEqual)(a, b);
+        if (matches) {
+            this.store.delete(key);
+            return true;
+        }
+        if (entry.attempts >= MAX_ATTEMPTS)
+            this.store.delete(key);
+        return false;
     }
 };
 exports.OtpStoreService = OtpStoreService;

@@ -1,12 +1,16 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, UseGuards } from '@nestjs/common';
 import { InvoicingService } from './invoicing.service';
+import { StaffAuthGuard, Roles } from '../auth/staff-auth.guard';
+import { StaffRole } from '../auth/staff.entity';
 
 @Controller('invoices')
 export class InvoicingController {
   constructor(private readonly invoicing: InvoicingService) {}
 
-  // Admin-panel use: invoices stuck waiting on eTIMS transmission. Add auth
-  // guards here once the admin panel's role system (see AuthModule) is wired up.
+  // Admin panel: invoices stuck waiting on eTIMS transmission. Financial
+  // visibility — restricted to owners, not front-desk or unit managers.
+  @UseGuards(StaffAuthGuard)
+  @Roles(StaffRole.OWNER)
   @Get('pending')
   getPending() {
     return this.invoicing.findPendingRetries();

@@ -77,7 +77,9 @@ let InvoicingService = InvoicingService_1 = class InvoicingService {
         }
     }
     async findPendingRetries() {
-        return this.invoices.find({ where: { status: invoice_entity_1.InvoiceStatus.PENDING_ETIMS } });
+        return this.invoices.find({
+            where: [{ status: invoice_entity_1.InvoiceStatus.PENDING_ETIMS }, { status: invoice_entity_1.InvoiceStatus.FAILED }],
+        });
     }
 };
 exports.InvoicingService = InvoicingService;

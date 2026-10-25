@@ -17,6 +17,7 @@ const invoicing_module_1 = require("../invoicing/invoicing.module");
 const foundation_module_1 = require("../foundation/foundation.module");
 const bookings_module_1 = require("../bookings/bookings.module");
 const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
+const staff_auth_guard_1 = require("../auth/staff-auth.guard");
 let PaymentsModule = class PaymentsModule {
 };
 exports.PaymentsModule = PaymentsModule;
@@ -30,7 +31,7 @@ exports.PaymentsModule = PaymentsModule = __decorate([
             jwt_1.JwtModule.register({ secret: process.env.JWT_SECRET }),
         ],
         controllers: [payments_controller_1.PaymentsController],
-        providers: [payments_service_1.PaymentsService, jwt_auth_guard_1.JwtAuthGuard],
+        providers: [payments_service_1.PaymentsService, jwt_auth_guard_1.JwtAuthGuard, staff_auth_guard_1.StaffAuthGuard],
         exports: [payments_service_1.PaymentsService],
     })
 ], PaymentsModule);

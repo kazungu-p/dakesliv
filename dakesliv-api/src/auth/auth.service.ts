@@ -1,148 +1,202 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
-import africastalking from 'africastalking';
+import { randomInt } from 'crypto';
+import { OAuth2Client } from 'google-auth-library';
 import { User } from './user.entity';
 import { OtpStoreService } from './otp-store.service';
+import { MailService } from './mail.service';
 
-export enum OtpChannel {
-  SMS = 'sms',
-  WHATSAPP = 'whatsapp',
-  EMAIL = 'email',
+export interface AuthResult {
+  user: User;
+  accessToken: string;
 }
 
+/**
+ * Customer sign-in. Two ways in, no passwords, no SMS:
+ *
+ *  1. Google — the client gets a Google ID token and sends it to
+ *     signInWithGoogle(), which verifies it with Google's public keys.
+ *  2. Email code — a 6-digit code emailed to any address (iCloud, Gmail,
+ *     Outlook, work email...) via requestEmailOtp() / verifyEmailOtp().
+ *
+ * Both end up at the same place: one `users` row per person, matched by
+ * email, and the same customer JWT. Signing in with Google and later with
+ * an emailed code to the same address lands on the same account.
+ *
+ * Staff/admin login is separate (email + password, see StaffAuthService).
+ */
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
-  // Lazily created — see getClient() below. Creating this eagerly (e.g. as
-  // a field initializer) would call the SDK's own validation the instant
-  // NestJS builds this class, which crashes the *entire application* on
-  // startup if the credentials are missing or wrong, rather than failing
-  // just the one request that actually needs them.
-  private client: ReturnType<typeof africastalking> | null = null;
+  private googleClient: OAuth2Client | null = null;
 
   constructor(
     @InjectRepository(User) private readonly users: Repository<User>,
     private readonly otpStore: OtpStoreService,
+    private readonly mail: MailService,
     private readonly jwt: JwtService,
   ) {}
 
-  /**
-   * Customer sign-in: a code sent via SMS, WhatsApp, or email — no password.
-   *
-   * Channel is picked automatically unless the client requests one:
-   *  - Kenyan numbers (+254) default to SMS — cheap, instant, reliable locally.
-   *  - Every other country code defaults to WhatsApp — diaspora clients
-   *    mostly already use it, and international SMS is both costlier and
-   *    far less reliable to deliver than a Kenyan-focused SMS provider like
-   *    Africa's Talking is built for.
-   *  - `email` is always available as a manual fallback (not yet wired —
-   *    see the TODO below).
-   *
-   * This is deliberately separate from staff/admin login — staff accounts
-   * touch client data and payments, so they use proper email+password
-   * credentials with 2FA instead (see the note in AuthModule).
-   */
-  async requestOtp(phone: string, preferredChannel?: OtpChannel): Promise<{ sent: true; channel: OtpChannel }> {
-    const channel = preferredChannel ?? this.defaultChannelFor(phone);
-    const code = this.generateCode();
-    this.otpStore.set(phone, code);
+  // ───────────────────────── Email code ─────────────────────────
 
-    // Dev-only convenience: outside production, the code is always logged
-    // here and delivery failures don't block the request. This means you
-    // can test the full sign-in flow locally without Africa's Talking,
-    // WhatsApp, or email working at all — just watch this terminal. This
-    // NEVER runs in production (gated on NODE_ENV), so a real delivery
-    // failure still fails loudly for real users, as it should.
+  async requestEmailOtp(rawEmail: string): Promise<{ sent: true }> {
+    const email = this.normalizeEmail(rawEmail);
+
+    const wait = this.otpStore.secondsUntilResend(email);
+    if (wait > 0) {
+      throw new HttpException(
+        `Please wait ${wait}s before requesting another code.`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    const code = this.generateCode();
+    this.otpStore.set(email, code);
+
+    // Dev-only convenience: outside production the code is always logged and
+    // delivery failures don't block the request, so you can test the whole
+    // flow without SMTP configured. Never runs in production — a real
+    // delivery failure must fail loudly for real users.
     const isDev = process.env.NODE_ENV !== 'production';
 
     try {
-      switch (channel) {
-        case OtpChannel.SMS:
-          await this.sendSms(phone, code);
-          break;
-        case OtpChannel.WHATSAPP:
-          await this.sendWhatsApp(phone, code);
-          break;
-        case OtpChannel.EMAIL:
-          // TODO: wire up Resend/SendGrid here.
-          this.logger.warn(`Email OTP requested for ${phone} but email sending isn't wired up yet.`);
-          break;
-      }
+      await this.mail.sendOtp(email, code);
     } catch (err) {
-      if (!isDev) throw err;
+      if (!isDev) {
+        this.logger.error(`Failed to email OTP to ${email}`, err as Error);
+        throw err;
+      }
       this.logger.warn(
-        `[DEV ONLY] Couldn't actually deliver the OTP to ${phone} (${(err as Error).message}) — ` +
-          `continuing anyway since NODE_ENV isn't 'production'. Use the code below to sign in.`,
+        `[DEV ONLY] Couldn't email the OTP to ${email} (${(err as Error).message}) — ` +
+          `continuing since NODE_ENV isn't 'production'. Use the code below to sign in.`,
       );
     }
 
     if (isDev) {
-      this.logger.log(`[DEV ONLY] OTP code for ${phone}: ${code}`);
+      this.logger.log(`[DEV ONLY] OTP code for ${email}: ${code}`);
     }
 
-    return { sent: true, channel };
+    return { sent: true };
   }
 
-  async verifyOtp(phone: string, code: string): Promise<{ user: User; accessToken: string }> {
-    const valid = this.otpStore.verify(phone, code);
-    if (!valid) {
+  async verifyEmailOtp(rawEmail: string, code: string, name?: string): Promise<AuthResult> {
+    const email = this.normalizeEmail(rawEmail);
+    if (!this.otpStore.verify(email, code)) {
       throw new UnauthorizedException('That code is incorrect or has expired.');
     }
 
-    let user = await this.users.findOneBy({ phone });
+    // Receiving the code proves they own this mailbox, so it's safe to
+    // match (or create) the account purely by email.
+    let user = await this.users.findOneBy({ email });
     if (!user) {
-      user = this.users.create({ phone, name: 'New customer' });
-      await this.users.save(user);
+      user = await this.users.save(
+        this.users.create({ email, name: name?.trim() || email.split('@')[0] }),
+      );
+    }
+    return this.issueSession(user);
+  }
+
+  // ───────────────────────── Google ─────────────────────────
+
+  async signInWithGoogle(idToken: string): Promise<AuthResult> {
+    const audiences = (process.env.GOOGLE_CLIENT_IDS ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (audiences.length === 0) {
+      throw new Error('Google sign-in isn\'t configured — set GOOGLE_CLIENT_IDS in .env.');
     }
 
-    const accessToken = await this.jwt.signAsync({ sub: user.id, phone: user.phone });
+    if (!this.googleClient) this.googleClient = new OAuth2Client();
+
+    let payload;
+    try {
+      // Checks the signature against Google's keys, the expiry, the issuer,
+      // and that the token was minted for OUR app (audience) — the last one
+      // is what stops a token issued to some other app being replayed here.
+      const ticket = await this.googleClient.verifyIdToken({ idToken, audience: audiences });
+      payload = ticket.getPayload();
+    } catch {
+      throw new UnauthorizedException('Google sign-in failed. Please try again.');
+    }
+
+    if (!payload?.sub || !payload.email) {
+      throw new UnauthorizedException('Google sign-in failed. Please try again.');
+    }
+    // Only trust the email to link accounts if Google has verified it.
+    if (!payload.email_verified) {
+      throw new UnauthorizedException('Your Google email address isn\'t verified.');
+    }
+
+    const googleId = payload.sub;
+    const email = this.normalizeEmail(payload.email);
+
+    let user = await this.users.findOneBy({ googleId });
+    if (!user) {
+      // First Google sign-in for this person: attach to an existing account
+      // with the same (verified) email — e.g. they signed in by emailed code
+      // before — or create a new one.
+      user = await this.users.findOneBy({ email });
+      if (user) {
+        user.googleId = googleId;
+        await this.users.save(user);
+      } else {
+        user = await this.users.save(
+          this.users.create({ googleId, email, name: payload.name?.trim() || email.split('@')[0] }),
+        );
+      }
+    }
+    return this.issueSession(user);
+  }
+
+  // ───────────────────────── Profile ─────────────────────────
+
+  findById(id: string): Promise<User> {
+    return this.users.findOneByOrFail({ id });
+  }
+
+  async updateProfile(id: string, changes: { name?: string; phone?: string }): Promise<User> {
+    const user = await this.users.findOneByOrFail({ id });
+
+    if (changes.phone && changes.phone !== user.phone) {
+      const taken = await this.users.findOneBy({ phone: changes.phone });
+      if (taken && taken.id !== user.id) {
+        throw new ConflictException('That phone number is already linked to another account.');
+      }
+      user.phone = changes.phone;
+    }
+    if (changes.name !== undefined) {
+      const name = changes.name.trim();
+      if (!name) throw new BadRequestException('Name can\'t be empty.');
+      user.name = name;
+    }
+    return this.users.save(user);
+  }
+
+  // ───────────────────────── Helpers ─────────────────────────
+
+  private async issueSession(user: User): Promise<AuthResult> {
+    const accessToken = await this.jwt.signAsync({ sub: user.id, email: user.email, type: 'customer' });
     return { user, accessToken };
   }
 
-  private getClient() {
-    if (!process.env.AFRICAS_TALKING_API_KEY || !process.env.AFRICAS_TALKING_USERNAME) {
-      throw new Error(
-        "Africa's Talking isn't configured — set AFRICAS_TALKING_API_KEY and AFRICAS_TALKING_USERNAME in .env.",
-      );
-    }
-    if (!this.client) {
-      this.client = africastalking({
-        apiKey: process.env.AFRICAS_TALKING_API_KEY,
-        username: process.env.AFRICAS_TALKING_USERNAME,
-      });
-    }
-    return this.client;
+  private normalizeEmail(email: string): string {
+    return email.trim().toLowerCase();
   }
 
-  private defaultChannelFor(phone: string): OtpChannel {
-    return phone.startsWith('+254') ? OtpChannel.SMS : OtpChannel.WHATSAPP;
-  }
-
+  // crypto.randomInt is cryptographically secure; Math.random is predictable
+  // and shouldn't be used for anything that gates account access.
   private generateCode(): string {
-    return Math.floor(100000 + Math.random() * 900000).toString(); // 6 digits
-  }
-
-  private async sendSms(phone: string, code: string): Promise<void> {
-    const sms = this.getClient().SMS;
-    await sms.send({
-      to: [phone],
-      message: `Your DAKESLIV verification code is ${code}. It expires in 5 minutes.`,
-    });
-  }
-
-  private async sendWhatsApp(phone: string, code: string): Promise<void> {
-    // Africa's Talking's WhatsApp product needs a registered WhatsApp
-    // business number (separate from your SMS sender ID) — see
-    // AFRICAS_TALKING_WA_NUMBER in .env.example.
-    const whatsapp = this.getClient().WHATSAPP;
-    await whatsapp.sendMessage({
-      waNumber: process.env.AFRICAS_TALKING_WA_NUMBER,
-      phoneNumber: phone,
-      body: {
-        message: `Your DAKESLIV verification code is ${code}. It expires in 5 minutes.`,
-      },
-    });
+    return randomInt(100000, 1000000).toString(); // 6 digits
   }
 }

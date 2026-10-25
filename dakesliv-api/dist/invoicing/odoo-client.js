@@ -73,11 +73,14 @@ class OdooClient {
         return this.call('object', 'execute_kw', [this.db, uid, this.apiKey, model, method, args, kwargs]);
     }
     async findOrCreatePartner(name, phone, email) {
-        const existing = await this.executeKw('res.partner', 'search', [[['phone', '=', phone]]]);
-        if (existing.length > 0)
-            return existing[0];
+        const domain = phone ? [['phone', '=', phone]] : email ? [['email', '=', email]] : null;
+        if (domain) {
+            const existing = await this.executeKw('res.partner', 'search', [domain]);
+            if (existing.length > 0)
+                return existing[0];
+        }
         return this.executeKw('res.partner', 'create', [
-            [{ name, phone, email: email || false }],
+            [{ name, phone: phone || false, email: email || false }],
         ]);
     }
     async createInvoice(params) {

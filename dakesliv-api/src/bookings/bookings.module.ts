@@ -7,6 +7,7 @@ import { Service } from '../services/service.entity';
 import { BookingsService } from './bookings.service';
 import { BookingsController } from './bookings.controller';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { StaffAuthGuard } from '../auth/staff-auth.guard';
 
 @Module({
   imports: [
@@ -14,7 +15,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
     JwtModule.register({ secret: process.env.JWT_SECRET }),
   ],
   controllers: [BookingsController],
-  providers: [BookingsService, JwtAuthGuard],
+  providers: [BookingsService, JwtAuthGuard, StaffAuthGuard],
   exports: [BookingsService],
 })
 export class BookingsModule {}

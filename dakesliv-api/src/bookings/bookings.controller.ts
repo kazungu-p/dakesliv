@@ -5,6 +5,8 @@ import { CreateWalkInBookingDto } from './dto/create-walk-in-booking.dto';
 import { BookingChannel } from './booking.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { StaffAuthGuard } from '../auth/staff-auth.guard';
+import { CurrentStaff } from '../auth/current-staff.decorator';
 
 @Controller('bookings')
 export class BookingsController {
@@ -24,22 +26,26 @@ export class BookingsController {
     );
   }
 
-  // Front-desk flow from the admin panel — no staff auth guard yet (that
-  // system doesn't exist), so this is intentionally unguarded for now. Do
-  // not expose this route to the public internet without one; see the TODO
-  // on CreateWalkInBookingDto.
+  // Front-desk flow: requires a real staff session. staffId comes from the
+  // staff token, never the request body, the same way customer bookings
+  // never trust a client-supplied userId.
+  @UseGuards(StaffAuthGuard)
   @Post('walk-in')
-  createWalkIn(@Body() dto: CreateWalkInBookingDto) {
-    return this.bookings.createFromIds(
-      dto.userId,
+  createWalkIn(
+    @Body() dto: CreateWalkInBookingDto,
+    @CurrentStaff() staff: { id: string },
+  ) {
+    return this.bookings.createWalkIn(
+      dto.customerPhone,
+      dto.customerName,
       dto.serviceId,
       new Date(dto.scheduledAt),
-      BookingChannel.WALK_IN,
-      dto.staffId,
+      staff.id,
     );
   }
 
   // Admin panel: front-desk "today's schedule" view.
+  @UseGuards(StaffAuthGuard)
   @Get('today')
   findToday() {
     return this.bookings.findForToday();
@@ -58,6 +64,7 @@ export class BookingsController {
   }
 
   // Admin panel: a business unit manager's bookings.
+  @UseGuards(StaffAuthGuard)
   @Get()
   findForUnit(@Query('businessUnitId') businessUnitId: string) {
     return this.bookings.findForUnit(businessUnitId);

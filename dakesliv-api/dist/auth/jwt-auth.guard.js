@@ -23,14 +23,18 @@ let JwtAuthGuard = class JwtAuthGuard {
         if (!token) {
             throw new common_1.UnauthorizedException('Sign in required.');
         }
+        let payload;
         try {
-            const payload = await this.jwt.verifyAsync(token);
-            request.user = { id: payload.sub, phone: payload.phone };
-            return true;
+            payload = await this.jwt.verifyAsync(token);
         }
         catch {
             throw new common_1.UnauthorizedException('Your session has expired — sign in again.');
         }
+        if (payload.type === 'staff') {
+            throw new common_1.UnauthorizedException('This action requires a customer account, not a staff login.');
+        }
+        request.user = { id: payload.sub, email: payload.email };
+        return true;
     }
 };
 exports.JwtAuthGuard = JwtAuthGuard;

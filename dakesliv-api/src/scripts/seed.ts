@@ -1,7 +1,9 @@
 import 'dotenv/config';
+import * as bcrypt from 'bcrypt';
 import { DataSource } from 'typeorm';
 import { BusinessUnit } from '../business-units/business-unit.entity';
 import { Service } from '../services/service.entity';
+import { Staff, StaffRole } from '../auth/staff.entity';
 
 // Placeholder prices in KES — these are NOT final. Confirm real pricing with
 // the client before launch and re-run this script (it's safe to re-run;
@@ -52,15 +54,7 @@ const seedData: {
   },
 ];
 
-async function seed() {
-  const dataSource = new DataSource({
-    type: 'postgres',
-    url: process.env.DATABASE_URL,
-    entities: [BusinessUnit, Service],
-    synchronize: false,
-  });
-
-  await dataSource.initialize();
+async function seed(dataSource: DataSource) {
   const unitRepo = dataSource.getRepository(BusinessUnit);
   const serviceRepo = dataSource.getRepository(Service);
 
@@ -94,11 +88,59 @@ async function seed() {
     console.log(`Seeded ${services.length} services for ${unit.name}`);
   }
 
-  await dataSource.destroy();
   console.log('Seed complete.');
 }
 
-seed().catch((err) => {
+/**
+ * Creates the first OWNER-level admin panel account, if one doesn't exist
+ * yet and credentials are provided. Set SEED_OWNER_EMAIL and
+ * SEED_OWNER_PASSWORD in .env to use this — deliberately not hardcoded, so
+ * a real password never ends up committed anywhere. There's no public
+ * signup for staff accounts; this script (or an existing OWNER through the
+ * admin panel, once that exists) is the only way to create one.
+ */
+async function seedOwnerAccount(dataSource: DataSource) {
+  const { SEED_OWNER_EMAIL, SEED_OWNER_PASSWORD, SEED_OWNER_NAME } = process.env;
+  if (!SEED_OWNER_EMAIL || !SEED_OWNER_PASSWORD) {
+    console.log('SEED_OWNER_EMAIL/SEED_OWNER_PASSWORD not set — skipping staff account creation.');
+    return;
+  }
+
+  const staffRepo = dataSource.getRepository(Staff);
+
+  const existing = await staffRepo.findOneBy({ email: SEED_OWNER_EMAIL });
+  if (existing) {
+    console.log(`Owner account for ${SEED_OWNER_EMAIL} already exists — skipping.`);
+  } else {
+    const passwordHash = await bcrypt.hash(SEED_OWNER_PASSWORD, 12);
+    await staffRepo.save(
+      staffRepo.create({
+        email: SEED_OWNER_EMAIL,
+        passwordHash,
+        name: SEED_OWNER_NAME || 'Owner',
+        role: StaffRole.OWNER,
+      }),
+    );
+    console.log(`Created OWNER account for ${SEED_OWNER_EMAIL}.`);
+  }
+}
+
+async function main() {
+  const dataSource = new DataSource({
+    type: 'postgres',
+    url: process.env.DATABASE_URL,
+    entities: [BusinessUnit, Service, Staff],
+    synchronize: false,
+  });
+  await dataSource.initialize();
+
+  await seed(dataSource);
+  await seedOwnerAccount(dataSource);
+
+  await dataSource.destroy();
+}
+
+main().catch((err) => {
   console.error('Seed failed:', err);
   process.exit(1);
 });

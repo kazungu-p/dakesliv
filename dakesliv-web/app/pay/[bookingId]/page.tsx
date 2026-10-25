@@ -8,6 +8,18 @@ import { apiFetch, formatKes, getToken, ApiBooking, ApiPayment } from "@/lib/api
 
 type Stage = "loading" | "ready" | "waiting" | "confirmed" | "error";
 
+/** Turns 0712 345 678 / 254712345678 / +254712345678 into +254712345678,
+ * or null if it isn't a valid Kenyan mobile number. */
+function normalizeKenyanPhone(input: string): string | null {
+  const digits = input.replace(/[\s-]/g, "");
+  let intl: string;
+  if (digits.startsWith("+")) intl = digits;
+  else if (digits.startsWith("254")) intl = `+${digits}`;
+  else if (digits.startsWith("0")) intl = `+254${digits.slice(1)}`;
+  else intl = `+254${digits}`;
+  return /^\+254[17]\d{8}$/.test(intl) ? intl : null;
+}
+
 export default function PayBookingPage({
   params,
 }: {
@@ -19,6 +31,7 @@ export default function PayBookingPage({
   const [stage, setStage] = useState<Stage>("loading");
   const [payment, setPayment] = useState<ApiPayment | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [phone, setPhone] = useState("");
 
   useEffect(() => {
     params.then(({ bookingId }) => setBookingId(bookingId));
@@ -36,6 +49,13 @@ export default function PayBookingPage({
         setStage("ready");
       })
       .catch(() => setStage("error"));
+    // Customers who signed in with Google or email may not have a phone on
+    // file yet — pre-fill it if they do, otherwise they type it below.
+    apiFetch<{ phone?: string | null }>("/auth/me")
+      .then((u) => {
+        if (u.phone) setPhone(u.phone);
+      })
+      .catch(() => {});
   }, [bookingId, router]);
 
   // Poll for payment confirmation once M-Pesa has been triggered. This
@@ -69,6 +89,11 @@ export default function PayBookingPage({
   async function handlePay() {
     if (!bookingId || !booking) return;
     setError(null);
+    const mpesaPhone = normalizeKenyanPhone(phone);
+    if (!mpesaPhone) {
+      setError("Enter a valid Safaricom number, e.g. 0712 345 678.");
+      return;
+    }
     setStage("waiting");
     try {
       const created = await apiFetch<ApiPayment>("/payments", {
@@ -77,6 +102,7 @@ export default function PayBookingPage({
           bookingId,
           amount: booking.service.price,
           method: "mpesa",
+          phone: mpesaPhone,
         }),
       });
       setPayment(created);
@@ -128,6 +154,26 @@ export default function PayBookingPage({
               <p className="mt-4 text-2xl font-medium text-[var(--gold-dim)]">
                 {formatKes(booking.service.price)}
               </p>
+
+              {stage === "ready" && (
+                <div className="mt-6 text-left">
+                  <label
+                    htmlFor="mpesa-phone"
+                    className="text-xs font-medium text-[var(--charcoal-text)]/70"
+                  >
+                    M-Pesa phone number
+                  </label>
+                  <input
+                    id="mpesa-phone"
+                    type="tel"
+                    autoComplete="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="0712 345 678"
+                    className="mt-1.5 w-full rounded-sm border border-[var(--paper-line)] bg-white px-4 py-3 text-sm text-[var(--charcoal-text)] outline-none focus:border-[var(--gold-dim)]"
+                  />
+                </div>
+              )}
 
               {error && <p className="mt-4 text-xs text-red-700">{error}</p>}
 

@@ -20,6 +20,7 @@ const payment_entity_1 = require("./payment.entity");
 const bookings_service_1 = require("../bookings/bookings.service");
 const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
 const current_user_decorator_1 = require("../auth/current-user.decorator");
+const staff_auth_guard_1 = require("../auth/staff-auth.guard");
 let PaymentsController = class PaymentsController {
     constructor(payments, bookings) {
         this.payments = payments;
@@ -33,13 +34,22 @@ let PaymentsController = class PaymentsController {
         if (dto.method === payment_entity_1.PaymentMethod.CASH) {
             throw new common_1.ForbiddenException('Cash payments can only be recorded from the admin panel.');
         }
-        return this.payments.initiate(booking, dto.amount, dto.method);
+        return this.payments.initiate(booking, booking.service.price, dto.method, dto.phone);
     }
     async initiateWalkIn(dto) {
         const booking = await this.bookings.findOne(dto.bookingId);
-        return this.payments.initiate(booking, dto.amount, payment_entity_1.PaymentMethod.CASH);
+        return this.payments.recordWalkInPayment(booking, booking.service.price, dto.method);
     }
     async intasendWebhook(body) {
+        const expected = process.env.INTASEND_WEBHOOK_CHALLENGE;
+        if (!expected) {
+            if (process.env.NODE_ENV === 'production') {
+                throw new common_1.ForbiddenException('Webhook not configured — set INTASEND_WEBHOOK_CHALLENGE.');
+            }
+        }
+        else if (body.challenge !== expected) {
+            throw new common_1.ForbiddenException('Invalid webhook challenge.');
+        }
         if (body.state === 'COMPLETE' && body.api_ref) {
             await this.payments.confirm(body.api_ref);
         }
@@ -70,6 +80,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], PaymentsController.prototype, "initiate", null);
 __decorate([
+    (0, common_1.UseGuards)(staff_auth_guard_1.StaffAuthGuard),
     (0, common_1.Post)('walk-in'),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -84,6 +95,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], PaymentsController.prototype, "intasendWebhook", null);
 __decorate([
+    (0, common_1.UseGuards)(staff_auth_guard_1.StaffAuthGuard),
     (0, common_1.Post)(':id/confirm'),
     __param(0, (0, common_1.Param)('id')),
     __metadata("design:type", Function),

@@ -8,6 +8,7 @@ import { InvoicingModule } from '../invoicing/invoicing.module';
 import { FoundationModule } from '../foundation/foundation.module';
 import { BookingsModule } from '../bookings/bookings.module';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { StaffAuthGuard } from '../auth/staff-auth.guard';
 
 @Module({
   imports: [
@@ -18,7 +19,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
     JwtModule.register({ secret: process.env.JWT_SECRET }),
   ],
   controllers: [PaymentsController],
-  providers: [PaymentsService, JwtAuthGuard],
+  providers: [PaymentsService, JwtAuthGuard, StaffAuthGuard],
   exports: [PaymentsService],
 })
 export class PaymentsModule {}

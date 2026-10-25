@@ -12,6 +12,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.InvoicingController = void 0;
 const common_1 = require("@nestjs/common");
 const invoicing_service_1 = require("./invoicing.service");
+const staff_auth_guard_1 = require("../auth/staff-auth.guard");
+const staff_entity_1 = require("../auth/staff.entity");
 let InvoicingController = class InvoicingController {
     constructor(invoicing) {
         this.invoicing = invoicing;
@@ -22,6 +24,8 @@ let InvoicingController = class InvoicingController {
 };
 exports.InvoicingController = InvoicingController;
 __decorate([
+    (0, common_1.UseGuards)(staff_auth_guard_1.StaffAuthGuard),
+    (0, staff_auth_guard_1.Roles)(staff_entity_1.StaffRole.OWNER),
     (0, common_1.Get)('pending'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),

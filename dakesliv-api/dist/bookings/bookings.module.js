@@ -16,6 +16,7 @@ const service_entity_1 = require("../services/service.entity");
 const bookings_service_1 = require("./bookings.service");
 const bookings_controller_1 = require("./bookings.controller");
 const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
+const staff_auth_guard_1 = require("../auth/staff-auth.guard");
 let BookingsModule = class BookingsModule {
 };
 exports.BookingsModule = BookingsModule;
@@ -26,7 +27,7 @@ exports.BookingsModule = BookingsModule = __decorate([
             jwt_1.JwtModule.register({ secret: process.env.JWT_SECRET }),
         ],
         controllers: [bookings_controller_1.BookingsController],
-        providers: [bookings_service_1.BookingsService, jwt_auth_guard_1.JwtAuthGuard],
+        providers: [bookings_service_1.BookingsService, jwt_auth_guard_1.JwtAuthGuard, staff_auth_guard_1.StaffAuthGuard],
         exports: [bookings_service_1.BookingsService],
     })
 ], BookingsModule);

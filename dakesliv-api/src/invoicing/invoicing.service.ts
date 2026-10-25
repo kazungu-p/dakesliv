@@ -10,7 +10,7 @@ const VAT_RATE = 0.16; // Kenya standard VAT rate — confirm DAKESLIV's registr
 @Injectable()
 export class InvoicingService {
   private readonly logger = new Logger(InvoicingService.name);
-  // Lazily created — same reasoning as the Africa's Talking and IntaSend
+  // Lazily created — same reasoning as the SMTP and IntaSend
   // clients elsewhere: a missing/wrong Odoo credential should fail just
   // the one invoice transmission, not crash the whole app on startup.
   private odoo: OdooClient | null = null;
@@ -98,8 +98,14 @@ export class InvoicingService {
     }
   }
 
-  /** For the admin panel: invoices still waiting on eTIMS transmission. */
+  /** For the admin panel: invoices still waiting on eTIMS transmission, or
+   * that failed outright — both need staff attention, so both show up
+   * here. Previously this only queried PENDING_ETIMS, which meant a
+   * genuinely failed transmission (caught in the catch block above)
+   * became invisible with no way for staff to know it needed retrying. */
   async findPendingRetries(): Promise<Invoice[]> {
-    return this.invoices.find({ where: { status: InvoiceStatus.PENDING_ETIMS } });
+    return this.invoices.find({
+      where: [{ status: InvoiceStatus.PENDING_ETIMS }, { status: InvoiceStatus.FAILED }],
+    });
   }
 }

@@ -38,8 +38,28 @@ let BookingsService = class BookingsService {
         });
         return this.bookings.save(booking);
     }
+    async createWalkIn(customerPhone, customerName, serviceId, scheduledAt, staffId) {
+        let user = await this.users.findOneBy({ phone: customerPhone });
+        if (!user) {
+            user = this.users.create({ phone: customerPhone, name: customerName || 'Walk-in customer' });
+            await this.users.save(user);
+        }
+        const service = await this.services.findOneByOrFail({ id: serviceId });
+        const booking = this.bookings.create({
+            user,
+            service,
+            scheduledAt,
+            channel: booking_entity_1.BookingChannel.WALK_IN,
+            staffId,
+            status: booking_entity_1.BookingStatus.PENDING,
+        });
+        return this.bookings.save(booking);
+    }
     findOne(id) {
         return this.bookings.findOneByOrFail({ id });
+    }
+    async markConfirmed(id) {
+        await this.bookings.update({ id }, { status: booking_entity_1.BookingStatus.CONFIRMED });
     }
     findForToday() {
         const start = new Date();
@@ -48,6 +68,9 @@ let BookingsService = class BookingsService {
         end.setHours(23, 59, 59, 999);
         return this.bookings
             .createQueryBuilder('booking')
+            .leftJoinAndSelect('booking.user', 'user')
+            .leftJoinAndSelect('booking.service', 'service')
+            .leftJoinAndSelect('service.businessUnit', 'businessUnit')
             .where('booking.scheduledAt BETWEEN :start AND :end', { start, end })
             .orderBy('booking.scheduledAt', 'ASC')
             .getMany();
@@ -55,7 +78,9 @@ let BookingsService = class BookingsService {
     findForUnit(businessUnitId) {
         return this.bookings
             .createQueryBuilder('booking')
+            .leftJoinAndSelect('booking.user', 'user')
             .leftJoinAndSelect('booking.service', 'service')
+            .leftJoinAndSelect('service.businessUnit', 'businessUnit')
             .where('service.businessUnitId = :businessUnitId', { businessUnitId })
             .getMany();
     }

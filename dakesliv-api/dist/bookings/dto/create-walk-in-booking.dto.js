@@ -15,9 +15,14 @@ class CreateWalkInBookingDto {
 }
 exports.CreateWalkInBookingDto = CreateWalkInBookingDto;
 __decorate([
-    (0, class_validator_1.IsUUID)(),
+    (0, class_validator_1.IsPhoneNumber)(),
     __metadata("design:type", String)
-], CreateWalkInBookingDto.prototype, "userId", void 0);
+], CreateWalkInBookingDto.prototype, "customerPhone", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateWalkInBookingDto.prototype, "customerName", void 0);
 __decorate([
     (0, class_validator_1.IsUUID)(),
     __metadata("design:type", String)
@@ -26,9 +31,4 @@ __decorate([
     (0, class_validator_1.IsDateString)(),
     __metadata("design:type", String)
 ], CreateWalkInBookingDto.prototype, "scheduledAt", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsUUID)(),
-    __metadata("design:type", String)
-], CreateWalkInBookingDto.prototype, "staffId", void 0);
 //# sourceMappingURL=create-walk-in-booking.dto.js.map

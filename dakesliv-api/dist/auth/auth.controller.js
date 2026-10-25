@@ -15,34 +15,71 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthController = void 0;
 const common_1 = require("@nestjs/common");
 const auth_service_1 = require("./auth.service");
+const request_email_otp_dto_1 = require("./dto/request-email-otp.dto");
+const verify_email_otp_dto_1 = require("./dto/verify-email-otp.dto");
+const google_sign_in_dto_1 = require("./dto/google-sign-in.dto");
+const update_profile_dto_1 = require("./dto/update-profile.dto");
+const jwt_auth_guard_1 = require("./jwt-auth.guard");
+const current_user_decorator_1 = require("./current-user.decorator");
 let AuthController = class AuthController {
     constructor(auth) {
         this.auth = auth;
     }
-    requestOtp(phone, channel) {
-        return this.auth.requestOtp(phone, channel);
+    requestEmailOtp(dto) {
+        return this.auth.requestEmailOtp(dto.email);
     }
-    verifyOtp(phone, code) {
-        return this.auth.verifyOtp(phone, code);
+    verifyEmailOtp(dto) {
+        return this.auth.verifyEmailOtp(dto.email, dto.code, dto.name);
+    }
+    google(dto) {
+        return this.auth.signInWithGoogle(dto.idToken);
+    }
+    me(user) {
+        return this.auth.findById(user.id);
+    }
+    updateMe(user, dto) {
+        return this.auth.updateProfile(user.id, dto);
     }
 };
 exports.AuthController = AuthController;
 __decorate([
-    (0, common_1.Post)('otp/request'),
-    __param(0, (0, common_1.Body)('phone')),
-    __param(1, (0, common_1.Body)('channel')),
+    (0, common_1.Post)('email/request'),
+    __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:paramtypes", [request_email_otp_dto_1.RequestEmailOtpDto]),
     __metadata("design:returntype", void 0)
-], AuthController.prototype, "requestOtp", null);
+], AuthController.prototype, "requestEmailOtp", null);
 __decorate([
-    (0, common_1.Post)('otp/verify'),
-    __param(0, (0, common_1.Body)('phone')),
-    __param(1, (0, common_1.Body)('code')),
+    (0, common_1.Post)('email/verify'),
+    __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:paramtypes", [verify_email_otp_dto_1.VerifyEmailOtpDto]),
     __metadata("design:returntype", void 0)
-], AuthController.prototype, "verifyOtp", null);
+], AuthController.prototype, "verifyEmailOtp", null);
+__decorate([
+    (0, common_1.Post)('google'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [google_sign_in_dto_1.GoogleSignInDto]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "google", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.Get)('me'),
+    __param(0, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "me", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.Patch)('me'),
+    __param(0, (0, current_user_decorator_1.CurrentUser)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, update_profile_dto_1.UpdateProfileDto]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "updateMe", null);
 exports.AuthController = AuthController = __decorate([
     (0, common_1.Controller)('auth'),
     __metadata("design:paramtypes", [auth_service_1.AuthService])

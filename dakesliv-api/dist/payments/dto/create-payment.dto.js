@@ -20,11 +20,12 @@ __decorate([
     __metadata("design:type", String)
 ], CreatePaymentDto.prototype, "bookingId", void 0);
 __decorate([
-    (0, class_validator_1.IsNumberString)(),
-    __metadata("design:type", String)
-], CreatePaymentDto.prototype, "amount", void 0);
-__decorate([
     (0, class_validator_1.IsEnum)(payment_entity_1.PaymentMethod),
     __metadata("design:type", String)
 ], CreatePaymentDto.prototype, "method", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsPhoneNumber)(),
+    __metadata("design:type", String)
+], CreatePaymentDto.prototype, "phone", void 0);
 //# sourceMappingURL=create-payment.dto.js.map

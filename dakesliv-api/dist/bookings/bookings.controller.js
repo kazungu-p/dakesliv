@@ -20,6 +20,8 @@ const create_walk_in_booking_dto_1 = require("./dto/create-walk-in-booking.dto")
 const booking_entity_1 = require("./booking.entity");
 const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
 const current_user_decorator_1 = require("../auth/current-user.decorator");
+const staff_auth_guard_1 = require("../auth/staff-auth.guard");
+const current_staff_decorator_1 = require("../auth/current-staff.decorator");
 let BookingsController = class BookingsController {
     constructor(bookings) {
         this.bookings = bookings;
@@ -27,8 +29,8 @@ let BookingsController = class BookingsController {
     create(dto, user) {
         return this.bookings.createFromIds(user.id, dto.serviceId, new Date(dto.scheduledAt), booking_entity_1.BookingChannel.ONLINE);
     }
-    createWalkIn(dto) {
-        return this.bookings.createFromIds(dto.userId, dto.serviceId, new Date(dto.scheduledAt), booking_entity_1.BookingChannel.WALK_IN, dto.staffId);
+    createWalkIn(dto, staff) {
+        return this.bookings.createWalkIn(dto.customerPhone, dto.customerName, dto.serviceId, new Date(dto.scheduledAt), staff.id);
     }
     findToday() {
         return this.bookings.findForToday();
@@ -55,13 +57,16 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], BookingsController.prototype, "create", null);
 __decorate([
+    (0, common_1.UseGuards)(staff_auth_guard_1.StaffAuthGuard),
     (0, common_1.Post)('walk-in'),
     __param(0, (0, common_1.Body)()),
+    __param(1, (0, current_staff_decorator_1.CurrentStaff)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [create_walk_in_booking_dto_1.CreateWalkInBookingDto]),
+    __metadata("design:paramtypes", [create_walk_in_booking_dto_1.CreateWalkInBookingDto, Object]),
     __metadata("design:returntype", void 0)
 ], BookingsController.prototype, "createWalkIn", null);
 __decorate([
+    (0, common_1.UseGuards)(staff_auth_guard_1.StaffAuthGuard),
     (0, common_1.Get)('today'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
@@ -77,6 +82,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], BookingsController.prototype, "findOneForUser", null);
 __decorate([
+    (0, common_1.UseGuards)(staff_auth_guard_1.StaffAuthGuard),
     (0, common_1.Get)(),
     __param(0, (0, common_1.Query)('businessUnitId')),
     __metadata("design:type", Function),

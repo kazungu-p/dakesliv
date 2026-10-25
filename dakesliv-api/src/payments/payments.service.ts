@@ -1,19 +1,20 @@
-import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
+import { BadGatewayException, BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import IntaSend from 'intasend-node';
 import { Payment, PaymentStatus, PaymentMethod } from './payment.entity';
 import { InvoicingService } from '../invoicing/invoicing.service';
 import { FoundationService } from '../foundation/foundation.service';
-import { Booking } from '../bookings/booking.entity';
+import { Booking, BookingStatus } from '../bookings/booking.entity';
+import { BookingsService } from '../bookings/bookings.service';
 
 const FOUNDATION_PERCENTAGE = 0.03; // 3% — confirm the real figure with the client
 
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
-  // Lazily created — see getClient(). Same reasoning as AuthService's
-  // Africa's Talking client: creating this eagerly would risk crashing the
+  // Lazily created — see getClient(). Same reasoning as MailService's
+  // SMTP transporter: creating this eagerly would risk crashing the
   // whole app on startup if the IntaSend keys are missing or wrong, rather
   // than failing just the one payment attempt that needs them.
   private client: IntaSend | null = null;
@@ -22,6 +23,7 @@ export class PaymentsService {
     @InjectRepository(Payment) private readonly payments: Repository<Payment>,
     private readonly invoicing: InvoicingService,
     private readonly foundation: FoundationService,
+    private readonly bookings: BookingsService,
   ) {}
 
   private getClient(): IntaSend {
@@ -53,7 +55,14 @@ export class PaymentsService {
    *    see confirm() below for what happens next.
    *  - CARD isn't wired up yet (see the TODO below).
    */
-  async initiate(booking: Booking, amount: string, method: PaymentMethod): Promise<Payment> {
+  async initiate(booking: Booking, amount: string, method: PaymentMethod, phone?: string): Promise<Payment> {
+    // Resolve the M-Pesa number BEFORE creating a payment record, so a
+    // missing number is a clean 400 rather than a stray FAILED payment.
+    const mpesaPhone = phone ?? booking.user.phone ?? undefined;
+    if (method === PaymentMethod.MPESA && !mpesaPhone) {
+      throw new BadRequestException('A phone number is needed to pay with M-Pesa.');
+    }
+
     const payment = this.payments.create({
       booking,
       amount,
@@ -69,16 +78,24 @@ export class PaymentsService {
     if (method === PaymentMethod.MPESA) {
       try {
         const [firstName, ...rest] = (booking.user.name || 'Dakesliv Customer').split(' ');
-        await this.getClient().collection().mpesaStkPush({
+        const response = await this.getClient().collection().mpesaStkPush({
           first_name: firstName,
           last_name: rest.join(' ') || 'Customer',
           email: booking.user.email || undefined,
           amount: Number(amount),
-          phone_number: booking.user.phone.replace('+', ''),
+          phone_number: mpesaPhone!.replace('+', ''),
           // api_ref round-trips through IntaSend's webhook payload, letting
           // us match the callback back to this exact payment record.
           api_ref: saved.id,
         });
+        // Store IntaSend's own invoice id for reconciliation against their
+        // dashboard/statements — previously this field existed on the
+        // entity but was never actually populated.
+        const invoiceId = response?.invoice?.invoice_id;
+        if (invoiceId) {
+          saved.providerRef = invoiceId;
+          await this.payments.save(saved);
+        }
       } catch (err) {
         this.logger.error(`M-Pesa STK push failed for payment ${saved.id}`, err);
         saved.status = PaymentStatus.FAILED;
@@ -115,12 +132,37 @@ export class PaymentsService {
 
     await this.invoicing.createFromPayment(payment);
     await this.foundation.allocateFromPayment(payment, FOUNDATION_PERCENTAGE);
+    await this.bookings.markConfirmed(payment.booking.id);
+    // Keep the in-memory object consistent with what markConfirmed() just
+    // wrote to the database — without this, the response returned to the
+    // caller shows the booking's stale pre-update status (still PENDING),
+    // even though the real database row is correctly CONFIRMED.
+    payment.booking.status = BookingStatus.CONFIRMED;
 
     return payment;
   }
 
   async markFailed(paymentId: string): Promise<void> {
     await this.payments.update({ id: paymentId }, { status: PaymentStatus.FAILED });
+  }
+
+  /**
+   * Records a walk-in payment collected in person at the office — cash, or
+   * M-Pesa paid directly to the business till/paybill outside this system.
+   * Either way, the money has already changed hands by the time staff
+   * enters this, so it always confirms immediately — never triggers an
+   * STK Push (there's no point pushing a payment request to someone
+   * standing right in front of you).
+   */
+  async recordWalkInPayment(booking: Booking, amount: string, method: PaymentMethod): Promise<Payment> {
+    const payment = this.payments.create({
+      booking,
+      amount,
+      method,
+      status: PaymentStatus.PENDING,
+    });
+    const saved = await this.payments.save(payment);
+    return this.confirm(saved.id);
   }
 
   /** For the payment page's status polling and the confirmation page. */

@@ -24,12 +24,15 @@ const intasend_node_1 = __importDefault(require("intasend-node"));
 const payment_entity_1 = require("./payment.entity");
 const invoicing_service_1 = require("../invoicing/invoicing.service");
 const foundation_service_1 = require("../foundation/foundation.service");
+const booking_entity_1 = require("../bookings/booking.entity");
+const bookings_service_1 = require("../bookings/bookings.service");
 const FOUNDATION_PERCENTAGE = 0.03;
 let PaymentsService = PaymentsService_1 = class PaymentsService {
-    constructor(payments, invoicing, foundation) {
+    constructor(payments, invoicing, foundation, bookings) {
         this.payments = payments;
         this.invoicing = invoicing;
         this.foundation = foundation;
+        this.bookings = bookings;
         this.logger = new common_1.Logger(PaymentsService_1.name);
         this.client = null;
     }
@@ -43,7 +46,11 @@ let PaymentsService = PaymentsService_1 = class PaymentsService {
         }
         return this.client;
     }
-    async initiate(booking, amount, method) {
+    async initiate(booking, amount, method, phone) {
+        const mpesaPhone = phone ?? booking.user.phone ?? undefined;
+        if (method === payment_entity_1.PaymentMethod.MPESA && !mpesaPhone) {
+            throw new common_1.BadRequestException('A phone number is needed to pay with M-Pesa.');
+        }
         const payment = this.payments.create({
             booking,
             amount,
@@ -57,14 +64,19 @@ let PaymentsService = PaymentsService_1 = class PaymentsService {
         if (method === payment_entity_1.PaymentMethod.MPESA) {
             try {
                 const [firstName, ...rest] = (booking.user.name || 'Dakesliv Customer').split(' ');
-                await this.getClient().collection().mpesaStkPush({
+                const response = await this.getClient().collection().mpesaStkPush({
                     first_name: firstName,
                     last_name: rest.join(' ') || 'Customer',
                     email: booking.user.email || undefined,
                     amount: Number(amount),
-                    phone_number: booking.user.phone.replace('+', ''),
+                    phone_number: mpesaPhone.replace('+', ''),
                     api_ref: saved.id,
                 });
+                const invoiceId = response?.invoice?.invoice_id;
+                if (invoiceId) {
+                    saved.providerRef = invoiceId;
+                    await this.payments.save(saved);
+                }
             }
             catch (err) {
                 this.logger.error(`M-Pesa STK push failed for payment ${saved.id}`, err);
@@ -85,10 +97,22 @@ let PaymentsService = PaymentsService_1 = class PaymentsService {
         await this.payments.save(payment);
         await this.invoicing.createFromPayment(payment);
         await this.foundation.allocateFromPayment(payment, FOUNDATION_PERCENTAGE);
+        await this.bookings.markConfirmed(payment.booking.id);
+        payment.booking.status = booking_entity_1.BookingStatus.CONFIRMED;
         return payment;
     }
     async markFailed(paymentId) {
         await this.payments.update({ id: paymentId }, { status: payment_entity_1.PaymentStatus.FAILED });
+    }
+    async recordWalkInPayment(booking, amount, method) {
+        const payment = this.payments.create({
+            booking,
+            amount,
+            method,
+            status: payment_entity_1.PaymentStatus.PENDING,
+        });
+        const saved = await this.payments.save(payment);
+        return this.confirm(saved.id);
     }
     findOne(paymentId) {
         return this.payments.findOneByOrFail({ id: paymentId });
@@ -100,6 +124,7 @@ exports.PaymentsService = PaymentsService = PaymentsService_1 = __decorate([
     __param(0, (0, typeorm_1.InjectRepository)(payment_entity_1.Payment)),
     __metadata("design:paramtypes", [typeorm_2.Repository,
         invoicing_service_1.InvoicingService,
-        foundation_service_1.FoundationService])
+        foundation_service_1.FoundationService,
+        bookings_service_1.BookingsService])
 ], PaymentsService);
 //# sourceMappingURL=payments.service.js.map

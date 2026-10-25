@@ -59,13 +59,20 @@ export class OdooClient {
     return this.call<T>('object', 'execute_kw', [this.db, uid, this.apiKey, model, method, args, kwargs]);
   }
 
-  /** Finds an existing customer by phone, or creates one. */
-  async findOrCreatePartner(name: string, phone: string, email?: string): Promise<number> {
-    const existing = await this.executeKw<number[]>('res.partner', 'search', [[['phone', '=', phone]]]);
-    if (existing.length > 0) return existing[0];
+  /**
+   * Finds an existing customer (by phone if we have one, otherwise by
+   * email), or creates one. Customers who signed in with Google or email may
+   * not have a phone number on file.
+   */
+  async findOrCreatePartner(name: string, phone?: string | null, email?: string | null): Promise<number> {
+    const domain = phone ? [['phone', '=', phone]] : email ? [['email', '=', email]] : null;
+    if (domain) {
+      const existing = await this.executeKw<number[]>('res.partner', 'search', [domain]);
+      if (existing.length > 0) return existing[0];
+    }
 
     return this.executeKw<number>('res.partner', 'create', [
-      [{ name, phone, email: email || false }],
+      [{ name, phone: phone || false, email: email || false }],
     ]);
   }
 

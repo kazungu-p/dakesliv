@@ -1,21 +1,21 @@
-import { IsDateString, IsOptional, IsUUID } from 'class-validator';
+import { IsDateString, IsOptional, IsPhoneNumber, IsUUID, IsString } from 'class-validator';
 
-// For bookings created by staff at the physical office, not by the customer
-// themselves — see BookingsController.createWalkIn(). Once staff/admin auth
-// exists, this endpoint should require a staff JWT and staffId should come
-// from that token rather than the request body, the same way CreateBookingDto
-// no longer trusts a client-supplied userId.
+// For bookings created by staff at the physical office. Front-desk staff
+// identify a customer by phone number, not an internal UUID — the service
+// finds an existing customer by phone or creates one on the spot, the same
+// way a walk-in actually works.
 export class CreateWalkInBookingDto {
-  @IsUUID()
-  userId: string;
+  @IsPhoneNumber()
+  customerPhone: string;
+
+  // Only used if this phone number doesn't match an existing customer.
+  @IsOptional()
+  @IsString()
+  customerName?: string;
 
   @IsUUID()
   serviceId: string;
 
   @IsDateString()
   scheduledAt: string;
-
-  @IsOptional()
-  @IsUUID()
-  staffId?: string;
 }

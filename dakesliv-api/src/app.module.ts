@@ -2,7 +2,9 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { HealthController } from './health.controller';
 import { AuthModule } from './auth/auth.module';
+import { StaffAuthModule } from './auth/staff-auth.module';
 import { BusinessUnitsModule } from './business-units/business-units.module';
 import { ServicesModule } from './services/services.module';
 import { BookingsModule } from './bookings/bookings.module';
@@ -11,6 +13,7 @@ import { InvoicingModule } from './invoicing/invoicing.module';
 import { FoundationModule } from './foundation/foundation.module';
 
 import { User } from './auth/user.entity';
+import { Staff } from './auth/staff.entity';
 import { BusinessUnit } from './business-units/business-unit.entity';
 import { Service } from './services/service.entity';
 import { Booking } from './bookings/booking.entity';
@@ -24,10 +27,11 @@ import { FoundationAllocation } from './foundation/foundation-allocation.entity'
     TypeOrmModule.forRoot({
       type: 'postgres',
       url: process.env.DATABASE_URL,
-      entities: [User, BusinessUnit, Service, Booking, Payment, Invoice, FoundationAllocation],
+      entities: [User, Staff, BusinessUnit, Service, Booking, Payment, Invoice, FoundationAllocation],
       synchronize: process.env.NODE_ENV !== 'production', // use migrations in production
     }),
     AuthModule,
+    StaffAuthModule,
     BusinessUnitsModule,
     ServicesModule,
     BookingsModule,
@@ -35,5 +39,6 @@ import { FoundationAllocation } from './foundation/foundation-allocation.entity'
     InvoicingModule,
     FoundationModule,
   ],
+  controllers: [HealthController],
 })
 export class AppModule {}
