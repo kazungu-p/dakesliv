@@ -1,11 +1,34 @@
+// A service offering shown on a unit page. Most units just list a name —
+// pricing comes from the live backend catalogue once it's seeded. A service
+// can instead carry:
+//  - a fixed, publishable price (shows even before the backend is wired up)
+//  - status "quote": too bespoke to price up front (e.g. custom software —
+//    every build is different), shown with a "contact us for a quote" tag
+//  - status "coming-soon": listed so people know it's on the way, but not
+//    bookable or priced yet
+export type UnitService =
+  | string
+  | { name: string; price: string }
+  | { name: string; status: "quote" | "coming-soon" };
+
 export type BusinessUnit = {
   slug: string;
   mark: string; // single glyph used as the crest mark
   name: string;
   tagline: string;
   description: string;
-  services: string[];
+  services: UnitService[];
   image: string;
+  // Optional division crest (transparent PNG) shown on this unit's page,
+  // alongside the DAKESLIV GROUP mark. Only grooming and events have one
+  // of their own so far.
+  logo?: string;
+  // When true, this unit's services are too variable (guest count, menu,
+  // décor, logistics, etc.) to quote from a fixed price list. The unit page
+  // skips the price/Book list entirely and shows a "contact us for a quote"
+  // call to action instead, for every client's order to be priced on its
+  // own terms.
+  quoteOnly?: boolean;
 };
 
 export const businessUnits: BusinessUnit[] = [
@@ -24,6 +47,7 @@ export const businessUnits: BusinessUnit[] = [
       "Massage & relaxation treatments",
     ],
     image: "/images/grooming.png",
+    logo: "/logos/grooming.png",
   },
   {
     slug: "events",
@@ -40,6 +64,8 @@ export const businessUnits: BusinessUnit[] = [
       "Guest logistics & transport",
     ],
     image: "/images/events.png",
+    logo: "/logos/catering.png",
+    quoteOnly: true,
   },
   {
     slug: "security",
@@ -65,11 +91,11 @@ export const businessUnits: BusinessUnit[] = [
     description:
       "Websites, apps, and booking platforms built for businesses that want a serious online presence.",
     services: [
-      "Business & e-commerce websites",
-      "Booking platforms & customer apps",
-      "Branding & marketing materials",
-      "Website maintenance & hosting support",
-      "Digital strategy",
+      { name: "Business & e-commerce websites", status: "quote" },
+      { name: "Booking platforms & custom software / apps", status: "quote" },
+      { name: "Branding & marketing materials", status: "coming-soon" },
+      { name: "Website maintenance & hosting support", status: "coming-soon" },
+      { name: "Digital strategy consultation", status: "coming-soon" },
     ],
     image: "/images/digital.png",
   },

@@ -34,14 +34,17 @@ export default function ServiceCrest({ unit }: { unit: BusinessUnit }) {
         </p>
 
         <ul className="mt-5 space-y-1.5 border-t border-[var(--paper-line)] pt-5">
-          {unit.services.slice(0, 3).map((s) => (
-            <li
-              key={s}
-              className="text-[13px] leading-snug text-[var(--charcoal-text)]/60"
-            >
-              {s}
-            </li>
-          ))}
+          {unit.services.slice(0, 3).map((s) => {
+            const label = typeof s === "string" ? s : s.name;
+            return (
+              <li
+                key={label}
+                className="text-[13px] leading-snug text-[var(--charcoal-text)]/60"
+              >
+                {label}
+              </li>
+            );
+          })}
         </ul>
 
         <span className="mt-6 inline-flex items-center gap-1.5 text-sm font-medium text-[var(--charcoal-text)] transition group-hover:gap-2.5 group-hover:text-[var(--gold-dim)]">

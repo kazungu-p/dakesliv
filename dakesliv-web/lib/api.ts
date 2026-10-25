@@ -40,6 +40,31 @@ export type ApiPayment = {
   booking: ApiBooking;
 };
 
+export type GalleryImage = {
+  id: string;
+  url: string;
+  category: string;
+  caption: string | null;
+  createdAt: string;
+};
+
+/** Fetches published gallery images, optionally filtered to one category.
+ * Returns null on any failure (backend down, network error) so the gallery
+ * page can fall back gracefully rather than showing a broken page — same
+ * convention as fetchBusinessUnits. */
+export async function fetchGalleryImages(
+  category?: string,
+): Promise<GalleryImage[] | null> {
+  try {
+    const query = category && category !== "all" ? `?category=${encodeURIComponent(category)}` : "";
+    const res = await fetch(`${API_URL}/gallery${query}`, { cache: "no-store" });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
 /** Fetches business units + services for the unit pages. Returns null on any
  * failure (backend down, network error) so pages can fall back gracefully
  * rather than showing a broken page. */

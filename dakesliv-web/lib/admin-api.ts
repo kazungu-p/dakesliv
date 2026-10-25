@@ -1,6 +1,7 @@
-import { API_URL, ApiBooking, formatKes } from "./api";
+import { API_URL, ApiBooking, formatKes, GalleryImage } from "./api";
 
 export { formatKes, API_URL };
+export type { GalleryImage };
 
 export function getStaffToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -48,6 +49,26 @@ export async function staffApiFetch<T>(path: string, init?: RequestInit): Promis
     if (res.status === 401) throw new Error("STAFF_SESSION_EXPIRED");
     const text = await res.text().catch(() => "");
     throw new Error(text || `Request failed (${res.status})`);
+  }
+  return res.json();
+}
+
+/** Same as staffApiFetch, but for multipart form bodies (file uploads) —
+ * deliberately does NOT set a Content-Type header, so the browser can set
+ * `multipart/form-data` with the correct boundary itself. */
+export async function staffApiUpload<T>(path: string, formData: FormData): Promise<T> {
+  const token = getStaffToken();
+  const res = await fetch(`${API_URL}${path}`, {
+    method: "POST",
+    body: formData,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!res.ok) {
+    if (res.status === 401) throw new Error("STAFF_SESSION_EXPIRED");
+    const text = await res.text().catch(() => "");
+    throw new Error(text || `Upload failed (${res.status})`);
   }
   return res.json();
 }

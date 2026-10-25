@@ -3,8 +3,9 @@ import Link from "next/link";
 const quickLinks = [
   { label: "Home", href: "/" },
   { label: "About", href: "/about" },
-  // Foundation link hidden until the program is live — see the note in
-  // app/page.tsx for how to bring it back.
+  { label: "Foundation", href: "/foundation" },
+  { label: "Portfolio", href: "/portfolio" },
+  { label: "Gallery", href: "/gallery" },
 ];
 
 const supportLinks = [

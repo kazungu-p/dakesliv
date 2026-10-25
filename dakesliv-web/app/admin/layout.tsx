@@ -56,6 +56,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const navLinks = [
     { label: "Today's schedule", href: "/admin" },
     { label: "New walk-in booking", href: "/admin/walk-in" },
+    { label: "Gallery", href: "/admin/gallery" },
     ...(staff?.role === "owner"
       ? [{ label: "Pending invoices", href: "/admin/invoices" }]
       : []),

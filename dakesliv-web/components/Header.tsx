@@ -9,10 +9,9 @@ const navLinks = [
   { label: "Services", href: "/#units" },
   { label: "How it works", href: "/#how-it-works" },
   { label: "About", href: "/about" },
-  // Foundation nav link hidden until the program is actually live — the
-  // page and backend contribution logic stay fully working, just not
-  // publicly linked yet. Re-add { label: "Foundation", href: "/foundation" }
-  // when ready to announce it.
+  { label: "Foundation", href: "/foundation" },
+  { label: "Portfolio", href: "/portfolio" },
+  { label: "Gallery", href: "/gallery" },
 ];
 
 // Section ids on the homepage that the anchor links above point to. Kept as
